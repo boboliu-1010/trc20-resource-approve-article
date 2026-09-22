@@ -115,11 +115,23 @@ const facilitator = new x402Facilitator()
 
 ## 7. Nile 体验与自托管入口
 
-**先确认服务是否实际启用扩展。** 截至 2026 年 9 月 22 日，[Official Facilitator 文档](https://docs.bankofai.io/zh-Hans/x402/core-concepts/OfficialFacilitator/)仍注明：BANK OF AI 运营的 Official Facilitator 尚未启用 `trc20ApprovalResourceSponsoring`。同日查询官方 [`/supported`](https://facilitator.bankofai.io/supported)，其扩展列表仅包含 `erc20ApprovalGasSponsoring`。官方服务支持 Nile 网络，不等于已经提供本文的首次授权资源赞助。
+**BANK OF AI 后续将在 Official Facilitator 的 TRON Nile 测试网上提供首次 Permit2 授权资源赞助。** 开放后，开发者可以通过官方托管服务体验本文的支付流程，无需为了体验这项能力自行准备 Resource Owner 或部署资源赞助 runtime。
 
-本文目前没有列出已核实的第三方公开 Nile 赞助服务。公开体验入口需要同时说明服务名称、运营主体、访问地址、支持资产与赞助条件；应确认 Facilitator 的 `/supported` 能力声明和业务路由返回的扩展信息相互匹配。
+### 通过官方 Nile 服务体验
 
-如果希望现在开始开发自己的 Facilitator，可以从 [SDK 接入说明](https://github.com/BofAI/x402/blob/v1.2.0/typescript/packages/extensions/src/trc20-approval-resource-sponsoring/README.md#facilitator)开始，在 Nile 配置资源账户与支持的测试代币，运行首次授权和付款流程。[公开的 Nile 集成测试源码](https://github.com/BofAI/x402/blob/v1.2.0/typescript/packages/mechanisms/tron/test/integrations/trc20-approval-resource-sponsoring.nile.test.ts)可作为验证路径的参考；测试源码存在并不代表某个公开服务当前可用，也不构成本次运行结果。
+官方服务由 **BANK OF AI** 运营。开发者可从 [Official Facilitator 接入文档](https://docs.bankofai.io/zh-Hans/x402/core-concepts/OfficialFacilitator/)了解连接方式；Nile 资源赞助开放后，按官方公布的支持资产与赞助条件完成以下步骤：
+
+1. **准备付款钱包。** 使用已激活的 Nile 账户，持有受支持的测试代币。首次授权额度为零时，可体验由官方提供授权资源的流程。
+2. **连接官方服务。** 业务服务端接入 Official Facilitator，并在受支持的 TRON Permit2 路由上声明资源赞助扩展；客户端使用支持该扩展的 SDK。
+3. **发起首次支付。** 钱包签署 TRC-20 授权交易和付款凭证，官方服务协调授权资源、广播 approve，并在授权生效后继续结算。
+
+付款账户无需为这次授权预先持有 TRX。具体开放时间、支持资产和赞助额度以官方服务说明为准。
+
+### 开发自己的 Facilitator
+
+如果希望自主管理资源账户、赞助策略或服务部署，可以从 [SDK Facilitator 接入说明](https://github.com/BofAI/x402/blob/v1.2.0/typescript/packages/extensions/src/trc20-approval-resource-sponsoring/README.md#facilitator)开始，在 Nile 配置自己的 Resource Owner 和资源赞助 runtime。
+
+[公开的 Nile 集成测试源码](https://github.com/BofAI/x402/blob/v1.2.0/typescript/packages/mechanisms/tron/test/integrations/trc20-approval-resource-sponsoring.nile.test.ts)提供了首次授权、付款与资源回收的验证路径，可用于组织自托管环境的测试。
 
 ## 8. 开发者参考
 
