@@ -1,24 +1,24 @@
 # 没有 TRX，x402 如何在 TRON 上完成首次 Permit2 支付？
 
-本文面向关注 x402 的开发者，介绍 TRON 上的 TRC-20 授权资源赞助，以及它在 Facilitator 中的实现位置。阅读后，你可以理解这项能力的工作方式，并找到测试和自托管开发的入口。
+在 TRON 上用 USDT 付款，第一步可能是先给 Permit2 做一次链上授权。这笔交易需要能量和带宽。对于只持有 USDT 的 Agent 钱包，支付往往就卡在这里。
 
-先明确前提：**付款账户已经激活，代币和支付路径受支持，服务端与 Facilitator 已启用赞助，且赞助方有足够资源与额度。** 在这些条件下，付款钱包可以无需预先持有 TRX，完成首次 Permit2 授权并继续支付。账户激活不包含在本扩展内。
+TRC-20 授权资源赞助让服务方承担这次授权所需的资源，付款钱包无需预先持有 TRX。前提是账户已经激活，使用的代币和支付方案受支持，服务端与 Facilitator 已开启赞助，赞助方也有足够的资源和额度。账户激活仍需单独完成。
 
-本文是能力介绍与架构导览，不覆盖生产部署和生产安全评估。相关边界见扩展规范的 [Security considerations](https://github.com/BofAI/x402/blob/v1.2.0/specs/extensions/trc20_approval_resource_sponsoring.md#security-considerations)。
+下面从首次支付讲起，再看 Facilitator 如何实现资源赞助。本文不涉及生产部署和安全评估，这部分请参阅 [Security considerations](https://github.com/BofAI/x402/blob/v1.2.0/specs/extensions/trc20_approval_resource_sponsoring.md#security-considerations)。
 
 ## 1. Agent 为什么会卡在首次支付？
 
-一个研究 Agent 找到了一份报价为 0.05 USDT 的数据。钱包里有足够的 USDT，价格也在预算内，但支付仍可能停在授权环节：账户还没有为 Permit2 建立代币授权，可用的能量和带宽又不足以执行这笔交易。
+假设一个研究 Agent 要购买一份 0.05 USDT 的数据。它的钱包已经激活，有 10 USDT、0 TRX，也从未授权过 Permit2。报价在预算内，但钱包缺少执行 approve 所需的能量和带宽，暂时还付不了款。
 
-USDT 是支付资产；能量（Energy）和带宽（Bandwidth）是执行链上操作所需的资源。钱包有钱支付服务，不等于已经具备首次授权所需的网络资源。
+这里有两笔不同的开销：买数据花的是 USDT，执行链上授权消耗的是能量（Energy）和带宽（Bandwidth）。USDT 余额够用，并不能解决授权交易的资源问题。
 
-通常，用户需要先准备 TRX 或补充资源。授权资源赞助将这段准备工作交给 Facilitator 协调，付款钱包仍然负责签名。
+如果由用户手动准备 TRX 或补充资源，Agent 就得停下来等。开启资源赞助后，Facilitator 可以在支付过程中安排资源，钱包仍负责签署授权交易和付款凭证。
 
 ## 2. Permit2 首次支付为什么需要 approve？
 
-Permit2 是这条支付路径使用的授权合约。付款钱包先通过 TRC-20 `approve` 允许指定的 Permit2 合约使用代币，再通过单独的付款凭证约束本次支付。
+要通过 Permit2 支付，钱包需要先调用代币合约的 `approve`，给指定的 Permit2 合约设置代币使用额度。之后每次付款，钱包还要签署单独的付款凭证，约定金额、收款方等条件。
 
-这几个概念承担不同职责：
+读流程时，需要区分以下几个概念：
 
 | 概念 | 在流程中的含义 |
 | --- | --- |
@@ -27,45 +27,45 @@ Permit2 是这条支付路径使用的授权合约。付款钱包先通过 TRC-2
 | 付款凭证 | 钱包对本次支付条件的签名，例如金额、收款方与有效期 |
 | 结算 | 根据有效的付款凭证执行链上付款或通道存款 |
 
-**approve 成功只代表授权生效，不代表本次付款已经完成。** 后续调用只要 allowance 仍然足够，就可以跳过 approve。
+approve 成功后，代币还没有付出去，要等结算完成才算付款成功。以后再调用服务，只要 allowance 足够，就不必重复 approve。
 
 ## 3. 授权资源赞助如何工作？
 
-`trc20ApprovalResourceSponsoring` 是接入现有 x402 流程的扩展。服务端在支付要求中声明赞助能力；客户端需要 approve 时，签署授权交易并随付款凭证一同提交，暂不自行广播。
+这项扩展在 SDK 中叫 `trc20ApprovalResourceSponsoring`。服务端通过 x402 支付要求告诉客户端：这次授权可以获得资源赞助。客户端发现需要 approve 时，会签好授权交易，连同付款凭证一起交给 Facilitator，不自行广播。
 
-Facilitator 验证交易与付款凭证后，协调 **Resource Owner**（资源账户）临时向付款账户委托所需的能量，必要时补充带宽。资源可用后，Facilitator 广播钱包签好的原始 approve，确认 allowance 生效，再继续结算。
+Facilitator 检查授权交易和付款凭证，再协调 **Resource Owner**（资源账户）向付款账户临时委托能量，必要时补充带宽。等资源可用，就广播钱包签好的原始 approve。确认 allowance 生效后，才继续结算。
 
 ![首次 Permit2 支付对比：自行准备授权资源，与由 Facilitator 协调资源赞助](trc20-resource-approve-assets/01-before-after.png)
 
-*图 1：资源准备方式发生变化；代币授权与付款凭证仍由付款钱包签署。*
+*图 1：Facilitator 负责协调资源，付款钱包负责签署授权交易和付款凭证。*
 
-Resource Owner 通过 Stake 2.0 质押获得可委托的资源。委托的是资源使用额度，质押本金仍属于资源账户。它与提供数据或模型的业务服务端（Resource Server）是不同角色。
+Resource Owner 的资源来自 Stake 2.0 质押。它把资源使用额度委托给付款账户，质押本金仍留在自己名下。这里的 Resource Owner 指提供链上资源的账户，提供数据或模型服务的业务服务端则叫 Resource Server。
 
-授权生效后，Facilitator 尽快发起资源撤回，并在后台跟踪恢复；结算不必等待撤回确认。网络资源仍然有成本，具体赞助条件由服务运营方决定。
+授权完成后，Facilitator 会发起资源撤回，尚未完成的撤回和恢复由后台继续处理，付款结算不必等它结束。赞助方承担了资源成本，因此会自行设定支持哪些资产、赞助多少额度等条件。
 
 ## 4. 五步支付流程与 0.05 USDT 案例
 
-以 `exact` 固定金额付款为例，一次首次支付可分为获取报价、钱包签名、校验并准备资源、授权后结算、返回结果五步。
+回到前面购买数据的例子。使用 `exact` 固定金额付款时，从 Agent 发起请求到拿到数据，流程如下：
 
 ![首次支付五步流程：获取报价、钱包签名、校验并提供资源、授权后结算、返回服务结果](trc20-resource-approve-assets/02-payment-flow.png)
 
 *图 2：客户端沿用 x402 请求流程，不需要另行调用资源准备接口。*
 
-假设已激活的钱包有 10 USDT、0 TRX，Permit2 allowance 为零。Agent 接受 0.05 USDT 的报价，服务按已声明的条件赞助授权资源；本例假设没有其他代币费用，也没有并发交易。一次成功调用的状态变化如下：
+Agent 接受 0.05 USDT 的报价，服务方按约定赞助首次授权所需的资源。假设没有额外代币费用，也没有其他并发交易，成功付款后，钱包和请求的状态会这样变化：
 
-| 检查项 | 支付前 | 授权与结算成功后 |
+| 项目 | 支付前 | 授权与结算成功后 |
 | --- | --- | --- |
 | 付款账户 USDT | 10 USDT | 9.95 USDT |
-| 付款账户 TRX | 0 TRX | 0 TRX，本流程不依赖付款人燃烧 TRX |
-| Permit2 allowance | 0，需要 approve | 已建立；后续可按剩余额度判断是否需要再次授权 |
+| 付款账户 TRX | 0 TRX | 0 TRX，授权资源由赞助方提供 |
+| Permit2 allowance | 0，需要 approve | 已建立，后续付款时检查剩余额度即可 |
 | 付款凭证 | 本次调用尚未签署 | 已签署，并用于本次 0.05 USDT 结算 |
 | 数据结果 | 尚未取得 | 已返回，Agent 继续任务 |
 
-*这是用于解释流程的状态示例，不是实测记录，也不是服务费用承诺。*
+*上表为流程示例，未经实测；实际费用以服务方说明为准。*
 
 ## 5. 支持范围与使用条件
 
-当前扩展规范覆盖以下 TRON Permit2 路径：
+这个扩展用于以下三种 TRON Permit2 支付方案中的 approve：
 
 | 支付方案 | 资源赞助作用的位置 |
 | --- | --- |
@@ -73,17 +73,17 @@ Resource Owner 通过 Stake 2.0 质押获得可委托的资源。委托的是资
 | `upto` | 授权支付上限、后续按实际金额结算的路径需要 approve 时 |
 | `batch-settlement` | Permit2 通道存款或补款需要 approve 时；后续 Voucher、Claim 等操作不重复使用本扩展 |
 
-付款账户需为已激活、使用默认 owner 权限的单签普通账户。服务端声明、客户端签名能力、Facilitator 配置与资产支持必须匹配。这条路径与 `exact_gasfree` 的 GasFree 账户和中继路径不同。
+目前支持的付款账户是已激活、使用默认 owner 权限的单签普通账户。接入时，客户端要能签署扩展要求的交易，服务端和 Facilitator 也要支持同一组网络、资产和支付方案。`exact_gasfree` 使用另外的 GasFree 账户与中继流程，不在这里讨论的范围内。
 
-SDK v1.2.0 签署的是向指定 canonical Permit2 授予 `MaxUint256` 额度的 approve；每笔付款或存款另有签名约束。默认 `zero-first` 策略适用于 allowance 为零的情况；非零但不足的额度需要按代币策略另行处理。具体条件以[扩展规范](https://github.com/BofAI/x402/blob/v1.2.0/specs/extensions/trc20_approval_resource_sponsoring.md)为准。
+SDK v1.2.0 的 approve 会向指定的 canonical Permit2 授予 `MaxUint256` 额度，每笔付款或存款仍需单独签名。默认的 `zero-first` 策略适用于 allowance 为零的账户。如果已有额度但不足以支付，需要按代币的授权规则另行处理，详见[扩展规范](https://github.com/BofAI/x402/blob/v1.2.0/specs/extensions/trc20_approval_resource_sponsoring.md)。
 
 ## 6. Facilitator 架构与精简注册示例
 
-Facilitator 中的协议实现验证授权交易与付款凭证；**runtime** 编排资源赞助；**Resource Owner** 提供资源并签署委托、撤回操作。runtime 完成授权准备后，相应支付方案继续执行结算。
+在 Facilitator 内，协议层负责检查授权交易和付款凭证，资源赞助的具体执行交给 runtime。runtime 负责安排资源、广播 approve、跟踪执行结果；Resource Owner 提供资源，并签署委托和撤回交易。授权完成后，再由对应的支付方案执行结算。
 
 ![Facilitator 内的 runtime 架构：verify、sponsor、reconcile，与 Resource Owner 和后台任务的关系](trc20-resource-approve-assets/04-runtime-architecture.png)
 
-*图 3：SDK 提供流程与接口，部署方接入资源账户和运行所需的组件。*
+*图 3：runtime 连接支付流程、资源账户和后台恢复任务。*
 
 | runtime 入口 | 职责 |
 | --- | --- |
@@ -91,7 +91,7 @@ Facilitator 中的协议实现验证授权交易与付款凭证；**runtime** �
 | `sponsor()` | 预留并委托资源，广播原始 approve，确认授权生效，记录并发起回收 |
 | `reconcile()` | 由后台任务调用，处理结果未知的交易以及未完成的资源撤回与恢复 |
 
-下面是**装配骨架**，用于说明注册关系，不是可直接运行的部署脚本。`network`、签名器、协调器、资产地址和权限配置需由应用提供：
+下面的**装配骨架**展示了 runtime 如何注册到 Facilitator。运行前还需要补齐 `network`、签名器、协调器、资产地址和权限配置：
 
 ```typescript
 import { x402Facilitator } from "@bankofai/x402-core/facilitator";
@@ -111,27 +111,27 @@ const facilitator = new x402Facilitator()
 // 另由后台任务持续调用 runtime.reconcile()。
 ```
 
-需要进一步定制时，可从 `policy`、`coordinator`、`chain` 和 `resourceOwnerSigner` 的接口入手。持久化、恢复、远程签名与 HSM 接入的要求见 [SDK Facilitator 接入文档](https://github.com/BofAI/x402/blob/v1.2.0/typescript/packages/extensions/src/trc20-approval-resource-sponsoring/README.md#facilitator)与[模块接口](https://github.com/BofAI/x402/blob/v1.2.0/typescript/packages/mechanisms/tron/src/resource-sponsoring/types.ts)。多资源池调度与第三方能量供应商接入需要额外实现，不属于现成的 SDK 部署能力。
+自托管时，可以按需要替换赞助策略 `policy`、资源协调器 `coordinator`、链交互层 `chain` 和资源账户签名器 `resourceOwnerSigner`。持久化、恢复、远程签名与 HSM 接入见 [SDK Facilitator 接入文档](https://github.com/BofAI/x402/blob/v1.2.0/typescript/packages/extensions/src/trc20-approval-resource-sponsoring/README.md#facilitator)与[模块接口](https://github.com/BofAI/x402/blob/v1.2.0/typescript/packages/mechanisms/tron/src/resource-sponsoring/types.ts)。多资源池调度和第三方能量供应商接入则需要自行实现。
 
 ## 7. Nile 体验与自托管入口
 
-**BANK OF AI 后续将在 Official Facilitator 的 TRON Nile 测试网上提供首次 Permit2 授权资源赞助。** 开放后，开发者可以通过官方托管服务体验本文的支付流程，无需为了体验这项能力自行准备 Resource Owner 或部署资源赞助 runtime。
+BANK OF AI 后续会在其运营的 Official Facilitator 上支持 TRON Nile 首次 Permit2 授权资源赞助。开放后，可以直接接入官方服务试一次完整支付，由官方准备授权资源，无需自己准备资源账户或部署 runtime。
 
 ### 通过官方 Nile 服务体验
 
-官方服务由 **BANK OF AI** 运营。开发者可从 [Official Facilitator 接入文档](https://docs.bankofai.io/zh-Hans/x402/core-concepts/OfficialFacilitator/)了解连接方式；Nile 资源赞助开放后，按官方公布的支持资产与赞助条件完成以下步骤：
+接入方式见 [Official Facilitator 文档](https://docs.bankofai.io/zh-Hans/x402/core-concepts/OfficialFacilitator/)。Nile 赞助开放后，可以按以下步骤体验：
 
-1. **准备付款钱包。** 使用已激活的 Nile 账户，持有受支持的测试代币。首次授权额度为零时，可体验由官方提供授权资源的流程。
-2. **连接官方服务。** 业务服务端接入 Official Facilitator，并在受支持的 TRON Permit2 路由上声明资源赞助扩展；客户端使用支持该扩展的 SDK。
-3. **发起首次支付。** 钱包签署 TRC-20 授权交易和付款凭证，官方服务协调授权资源、广播 approve，并在授权生效后继续结算。
+1. 准备一个已激活、尚未授权 Permit2 的 Nile 钱包，转入官方支持的测试代币。
+2. 将业务服务端接入 Official Facilitator，在支持的 TRON Permit2 路由上声明资源赞助扩展，客户端使用支持该扩展的 SDK。
+3. 发起请求并签名，观察 approve 生效、付款结算和服务返回结果的过程。
 
-付款账户无需为这次授权预先持有 TRX。具体开放时间、支持资产和赞助额度以官方服务说明为准。
+满足赞助条件时，付款钱包无需预先准备 TRX。开放时间、支持的测试代币和赞助额度，以官方服务说明为准。
 
 ### 开发自己的 Facilitator
 
-如果希望自主管理资源账户、赞助策略或服务部署，可以从 [SDK Facilitator 接入说明](https://github.com/BofAI/x402/blob/v1.2.0/typescript/packages/extensions/src/trc20-approval-resource-sponsoring/README.md#facilitator)开始，在 Nile 配置自己的 Resource Owner 和资源赞助 runtime。
+如果要自己管理资源账户和赞助策略，可以按 [SDK Facilitator 接入说明](https://github.com/BofAI/x402/blob/v1.2.0/typescript/packages/extensions/src/trc20-approval-resource-sponsoring/README.md#facilitator)，在 Nile 配置 Resource Owner 和 runtime。
 
-[公开的 Nile 集成测试源码](https://github.com/BofAI/x402/blob/v1.2.0/typescript/packages/mechanisms/tron/test/integrations/trc20-approval-resource-sponsoring.nile.test.ts)提供了首次授权、付款与资源回收的验证路径，可用于组织自托管环境的测试。
+首次授权、付款和资源回收该怎么验证，可以参考[公开的 Nile 集成测试源码](https://github.com/BofAI/x402/blob/v1.2.0/typescript/packages/mechanisms/tron/test/integrations/trc20-approval-resource-sponsoring.nile.test.ts)，在自己的环境中运行检查。
 
 ## 8. 开发者参考
 
