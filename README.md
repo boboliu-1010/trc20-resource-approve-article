@@ -4,7 +4,7 @@
 
 先明确前提：**付款账户已经激活，代币和支付路径受支持，服务端与 Facilitator 已启用赞助，且赞助方有足够资源与额度。** 在这些条件下，付款钱包可以无需预先持有 TRX，完成首次 Permit2 授权并继续支付。账户激活不包含在本扩展内。
 
-本文是能力介绍与架构导览，不覆盖生产部署和生产安全评估。相关边界见扩展规范的 [Security considerations](https://github.com/BofAI/x402/blob/e50e9f09149203a97e35110ee1cd64073487f30d/specs/extensions/trc20_approval_resource_sponsoring.md#security-considerations)。
+本文是能力介绍与架构导览，不覆盖生产部署和生产安全评估。相关边界见扩展规范的 [Security considerations](https://github.com/BofAI/x402/blob/v1.2.0/specs/extensions/trc20_approval_resource_sponsoring.md#security-considerations)。
 
 ## 1. Agent 为什么会卡在首次支付？
 
@@ -75,7 +75,7 @@ Resource Owner 通过 Stake 2.0 质押获得可委托的资源。委托的是资
 
 付款账户需为已激活、使用默认 owner 权限的单签普通账户。服务端声明、客户端签名能力、Facilitator 配置与资产支持必须匹配。这条路径与 `exact_gasfree` 的 GasFree 账户和中继路径不同。
 
-当前版本签署的是向指定 canonical Permit2 授予 `MaxUint256` 额度的 approve；每笔付款或存款另有签名约束。默认 `zero-first` 策略适用于 allowance 为零的情况；非零但不足的额度需要按代币策略另行处理。具体条件以[扩展规范](https://github.com/BofAI/x402/blob/e50e9f09149203a97e35110ee1cd64073487f30d/specs/extensions/trc20_approval_resource_sponsoring.md)为准。
+SDK v1.2.0 签署的是向指定 canonical Permit2 授予 `MaxUint256` 额度的 approve；每笔付款或存款另有签名约束。默认 `zero-first` 策略适用于 allowance 为零的情况；非零但不足的额度需要按代币策略另行处理。具体条件以[扩展规范](https://github.com/BofAI/x402/blob/v1.2.0/specs/extensions/trc20_approval_resource_sponsoring.md)为准。
 
 ## 6. Facilitator 架构与精简注册示例
 
@@ -111,7 +111,7 @@ const facilitator = new x402Facilitator()
 // 另由后台任务持续调用 runtime.reconcile()。
 ```
 
-需要进一步定制时，可从 `policy`、`coordinator`、`chain` 和 `resourceOwnerSigner` 的接口入手。持久化、恢复、远程签名与 HSM 接入的要求见 [SDK Facilitator 接入文档](https://github.com/BofAI/x402/blob/e50e9f09149203a97e35110ee1cd64073487f30d/typescript/packages/extensions/src/trc20-approval-resource-sponsoring/README.md#facilitator)与[模块接口](https://github.com/BofAI/x402/blob/e50e9f09149203a97e35110ee1cd64073487f30d/typescript/packages/mechanisms/tron/src/resource-sponsoring/types.ts)。多资源池调度与第三方能量供应商接入需要额外实现，不属于现成的 SDK 部署能力。
+需要进一步定制时，可从 `policy`、`coordinator`、`chain` 和 `resourceOwnerSigner` 的接口入手。持久化、恢复、远程签名与 HSM 接入的要求见 [SDK Facilitator 接入文档](https://github.com/BofAI/x402/blob/v1.2.0/typescript/packages/extensions/src/trc20-approval-resource-sponsoring/README.md#facilitator)与[模块接口](https://github.com/BofAI/x402/blob/v1.2.0/typescript/packages/mechanisms/tron/src/resource-sponsoring/types.ts)。多资源池调度与第三方能量供应商接入需要额外实现，不属于现成的 SDK 部署能力。
 
 ## 7. Nile 体验与自托管入口
 
@@ -119,13 +119,13 @@ const facilitator = new x402Facilitator()
 
 本文目前没有列出已核实的第三方公开 Nile 赞助服务。公开体验入口需要同时说明服务名称、运营主体、访问地址、支持资产与赞助条件；应确认 Facilitator 的 `/supported` 能力声明和业务路由返回的扩展信息相互匹配。
 
-如果希望现在开始开发自己的 Facilitator，可以从 [SDK 接入说明](https://github.com/BofAI/x402/blob/e50e9f09149203a97e35110ee1cd64073487f30d/typescript/packages/extensions/src/trc20-approval-resource-sponsoring/README.md#facilitator)开始，在 Nile 配置资源账户与支持的测试代币，运行首次授权和付款流程。[公开的 Nile 集成测试源码](https://github.com/BofAI/x402/blob/e50e9f09149203a97e35110ee1cd64073487f30d/typescript/packages/mechanisms/tron/test/integrations/trc20-approval-resource-sponsoring.nile.test.ts)可作为验证路径的参考；测试源码存在并不代表某个公开服务当前可用，也不构成本次运行结果。
+如果希望现在开始开发自己的 Facilitator，可以从 [SDK 接入说明](https://github.com/BofAI/x402/blob/v1.2.0/typescript/packages/extensions/src/trc20-approval-resource-sponsoring/README.md#facilitator)开始，在 Nile 配置资源账户与支持的测试代币，运行首次授权和付款流程。[公开的 Nile 集成测试源码](https://github.com/BofAI/x402/blob/v1.2.0/typescript/packages/mechanisms/tron/test/integrations/trc20-approval-resource-sponsoring.nile.test.ts)可作为验证路径的参考；测试源码存在并不代表某个公开服务当前可用，也不构成本次运行结果。
 
 ## 8. 开发者参考
 
-本文按 SDK 源码版本 `e50e9f0` 核对协议与接口。实际接入时，请确认所安装版本包含这些能力。
+本文基于 BANK OF AI x402 SDK **v1.2.0**，对应 `@bankofai/x402-tron@1.2.0` 与 `@bankofai/x402-extensions@1.2.0`。接口与支持范围见 [v1.2.0 发布说明](https://github.com/BofAI/x402/releases/tag/v1.2.0)。
 
 - [BANK OF AI x402：面向 AI 智能体的稳定币支付方案](https://docs.bankofai.io/zh-Hans/devnotes/x402-stablecoin-payments-for-agents/)：协议背景与支付方案。
-- [TRC-20 Approval Resource Sponsoring 规范](https://github.com/BofAI/x402/blob/e50e9f09149203a97e35110ee1cd64073487f30d/specs/extensions/trc20_approval_resource_sponsoring.md)：支持范围与授权约束。
-- [SDK 接入说明](https://github.com/BofAI/x402/blob/e50e9f09149203a97e35110ee1cd64073487f30d/typescript/packages/extensions/src/trc20-approval-resource-sponsoring/README.md)：客户端、服务端和 Facilitator 接入。
-- [Security considerations](https://github.com/BofAI/x402/blob/e50e9f09149203a97e35110ee1cd64073487f30d/specs/extensions/trc20_approval_resource_sponsoring.md#security-considerations)：生产安全评估需要考虑的协议边界。
+- [TRC-20 Approval Resource Sponsoring 规范](https://github.com/BofAI/x402/blob/v1.2.0/specs/extensions/trc20_approval_resource_sponsoring.md)：支持范围与授权约束。
+- [SDK 接入说明](https://github.com/BofAI/x402/blob/v1.2.0/typescript/packages/extensions/src/trc20-approval-resource-sponsoring/README.md)：客户端、服务端和 Facilitator 接入。
+- [Security considerations](https://github.com/BofAI/x402/blob/v1.2.0/specs/extensions/trc20_approval_resource_sponsoring.md#security-considerations)：生产安全评估需要考虑的协议边界。
