@@ -33,7 +33,7 @@ Permit2 是这条支付路径使用的授权合约。付款钱包先通过 TRC-2
 
 `trc20ApprovalResourceSponsoring` 是接入现有 x402 流程的扩展。服务端在支付要求中声明赞助能力；客户端需要 approve 时，签署授权交易并随付款凭证一同提交，暂不自行广播。
 
-Facilitator 验证交易与付款凭证后，协调 **Resource Owner（资源账户）**临时向付款账户委托所需的能量，必要时补充带宽。资源可用后，Facilitator 广播钱包签好的原始 approve，确认 allowance 生效，再继续结算。
+Facilitator 验证交易与付款凭证后，协调 **Resource Owner**（资源账户）临时向付款账户委托所需的能量，必要时补充带宽。资源可用后，Facilitator 广播钱包签好的原始 approve，确认 allowance 生效，再继续结算。
 
 ![首次 Permit2 支付对比：自行准备授权资源，与由 Facilitator 协调资源赞助](trc20-resource-approve-assets/01-before-after.png)
 
